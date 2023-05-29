@@ -42,8 +42,10 @@ class KioskMode {
 
     // Retrieve localStorage values & query string options.
     const queryStringsSet =
-      this.cached(["kmHeader", "kmSidebar", "kmOverflow", "kmMenuButton"]) || this.queryString(["kiosk", "hide_sidebar", "hide_header", "hide_overflow", "hide_menubutton"]);
+      this.cached(["kmHeader", "kmSidebar", "kmOverflow", "kmMenuButton"]) || this.queryString(["kiosk", "hide_sidebar", "hide_header", "hide_overflow", "hide_menubutton", "debug"]);
     if (queryStringsSet) {
+      this.debug = this.queryString(["debug"]);
+      this.trace = this.queryString(["trace"]);
       this.hideHeader = this.cached("kmHeader") || this.queryString(["kiosk", "hide_header"]);
       this.hideSidebar = this.cached("kmSidebar") || this.queryString(["kiosk", "hide_sidebar"]);
       this.hideOverflow = this.cached("kmOverflow") || this.queryString(["kiosk", "hide_overflow"]);
@@ -91,13 +93,16 @@ class KioskMode {
 
   insertStyles(lovelace) {
     const huiRoot = lovelace.shadowRoot.querySelector("hui-root").shadowRoot;
-    const drawerLayout = this.main.querySelector("app-drawer-layout");
-    const appToolbar = huiRoot.querySelector("app-toolbar");
+    const drawerLayout = this.main.querySelector("ha-sidebar");
+    const appToolbar = huiRoot.querySelector(".header");
     const overflowStyle = "ha-button-menu{display:none !important;}";
-    const headerStyle = "#view{min-height:100vh !important;--header-height:0;}app-header{display:none;}";
+    const headerStyle = "#view{--header-height:0;}";
+    if (this.debug) {
+      console.log({ huiRoot, main: this.main, drawerLayout, appToolbar });
+    }
 
     if (this.hideHeader || this.hideOverflow) {
-      this.addStyle(`${this.hideHeader ? headerStyle : ""}${this.hideOverflow ? overflowStyle : ""}`, huiRoot);
+      this.addStyle(`${this.hideHeader ? headerStyle : ""}${this.hideOverflow ? overflowStyle : ""}`, huiRoot, "huiRoot");
       if (this.queryString("cache")) {
         if (this.hideHeader) this.setCache("kmHeader", "true");
         if (this.hideOverflow) this.setCache("kmOverflow", "true");
@@ -107,15 +112,15 @@ class KioskMode {
     }
 
     if (this.hideSidebar) {
-      this.addStyle(":host{--app-drawer-width:0 !important;}#drawer{display:none;}", drawerLayout);
-      this.addStyle("ha-menu-button{display:none !important;}", appToolbar);
+      this.addStyle(":host{--mdc-drawer-width:0 !important;}", drawerLayout, "drawerLayout");
+      this.addStyle(".header{display:none !important;}", appToolbar, "appToolbar");
       if (this.queryString("cache")) this.setCache("kmSidebar", "true");
     } else {
       this.removeStyle([appToolbar, drawerLayout]);
     }
 
     if (this.hideMenuButton) {
-      this.addStyle("ha-menu-button{display:none !important;}", appToolbar);
+      this.addStyle("ha-menu-button{display:none !important;}", appToolbar, "appToolbar");
       if (this.queryString("cache")) this.setCache("kmMenuButton", "true");
     } else {
       this.removeStyle(appToolbar);
@@ -187,10 +192,15 @@ class KioskMode {
     return elem.querySelector(`#kiosk_mode_${elem.localName}`);
   }
 
-  addStyle(css, elem) {
+  addStyle(css, elem, calledFor) {
+    if (!elem) {
+      console.warn("Missing element that should have style added: " + calledFor);
+      if (this.trace) console.trace();
+      return;
+    }
     if (!this.styleExists(elem)) {
       const style = document.createElement("style");
-      style.setAttribute("id", `kiosk_mode_${elem.localName}`);
+      style.setAttribute("id", `kiosk_mode_${calledFor ?? elem.localName}`);
       style.innerHTML = css;
       elem.appendChild(style);
     }
@@ -198,6 +208,11 @@ class KioskMode {
 
   removeStyle(elements) {
     this.array(elements).forEach((elem) => {
+      if (!elem) {
+        console.warn("Missing element that should have style removed");
+        if (this.trace) console.trace();
+        return;
+      }
       if (this.styleExists(elem)) elem.querySelector(`#kiosk_mode_${elem.localName}`).remove();
     });
   }
